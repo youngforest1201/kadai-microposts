@@ -44,12 +44,16 @@ class User extends Authenticatable
     {
         return $this->hasMany(Micropost::class);
     }
+    public function favorites()
+    {
+        return $this->hasMany(Favorite::class);
+    }
     /**
      * このユーザに関係するモデルの件数をロードする。
      */
     public function loadRelationshipCounts()
     {
-        $this->loadCount(['microposts', 'followings', 'followers']);
+        $this->loadCount(['microposts', 'favorites','followings', 'followers','favoritings']);
     }
 
     /**
@@ -135,4 +139,76 @@ class User extends Authenticatable
         // それらのユーザが所有する投稿に絞り込む
         return Micropost::whereIn('user_id', $userIds);
     }
+
+    /**
+     * このユーザがお気に入りのmicropostのID。（ Userモデルとの関係を定義）
+     */
+    public function favoritings()
+    {
+        return $this->belongsToMany(Micropost::class, 'favorites', 'user_id', 'micropost_id' )->withTimestamps();
+    }
+
+
+    /**
+     * 指定された $userIdのユーザをこのユーザがフォロー中であるか調べる。フォロー中ならtrueを返す。
+     *
+     * @param  int  $userId
+     * @return bool
+     */
+    public function is_favorite($micropostsId)
+    {
+        //お気に入り中のユーザに $userIdのものが存在するか
+        return $this->favoritings()->where('micropost_id', $micropostsId)->exists();
+    }
+    
+    /**
+     * $userIdで指定されたユーザをお気に入り登録する。
+     *
+     * @param  int  $userId
+     * @return bool
+     */
+    public function favorite($micropostsId)
+    {
+        // すでにお気に入り登録しているかの確認
+        $exist = $this->is_favorite($micropostsId);
+        // 対象が自分自身かどうかの確認
+        //$its_me = $this->id == $micropostsId;
+        // $userの取得
+        $user = \Auth::user();
+        
+        if ($exist) {
+            // すでにフォローしていれば何もしない
+            return false;
+        } else {
+            // お気に入り登録でなければ、お気に入りに登録する
+            $this->favoritings()->attach($micropostsId);
+            return true;
+        }
+    }
+
+    /**
+     * $userIdで指定されたユーザをお気に入り登録からはずす。
+     *
+     * @param  int  $userId
+     * @return bool
+     */
+    public function unfavorite($micropostsId)
+    {
+        // すでにお気に入り登録しているかの確認
+        $exist = $this->is_favorite($micropostsId);
+        // 対象が自分自身かどうかの確認
+        $its_me = $this->id == $micropostsId;
+        // $userの取得
+        $user = \Auth::user();
+
+        if ($exist && !$its_me) {
+            // すでにお気に入り登録していれば、お気に入り登録から外す
+            $this->favoritings()->detach($micropostsId);
+            return true;
+        } else {
+            // お気に入り登録でなければ何もしない
+            return false;
+        }
+    }
+
 }
